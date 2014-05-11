@@ -12,7 +12,7 @@ func Test_slabs_clsid(t *testing.T) {
 }
 
 func Test_SlabInit(t *testing.T) {
-   SlabInit(1024*1024, 1, true)
+   SlabInit(1024*1024, 1.2, false)
    fmt.Println("mem_current", mem_current, "mem_avail", mem_avail)
 }
 

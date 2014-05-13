@@ -15,30 +15,15 @@ type size_t uint64
 
 /* allocation structure */
 type slabclass_t struct {
-   size size_t         /*size of items*/
-   perslab uint64      /*how many items per slab*/
-   slots uintptr     /*list of item ptrs*/
-   sl_curr uint      /*total free items in list*/
-   slabs uint        /*the number of slabs for this class*/
-   slab_list uintptr /*array of slab pointers*/
-   list_size uint    /*size of array above*/
-   killing uint      /*index+1 of dying slab*/
-   requested uint    /*number of requested bytes*/
-}
-
-/* structure for storing items in the pool*/
-type item_t struct {
-   next *item_t
-   prev *item_t
-   h_next *item_t    /*hash chain next*/
-   time uint         /*least recent access*/
-   exptime uint      /*expire time*/
-   nbytes int        /*size of data*/
-   refcount int
-   nsuffix uint8     /*lenth of flags-and-length string*/
-   it_flags uint8
-   slabs_clsid uint8 /*which slab class the item belongs to*/
-   nkey uint8        /*key length*/
+   size size_t          /*size of items*/
+   perslab uint64       /*how many items per slab*/
+   slots *item_t        /*list of item ptrs*/
+   sl_curr uint         /*total free items in list*/
+   slabs uint           /*the number of slabs for this class*/
+   slab_list []*        /*array of slab pointers*/
+   list_size uint       /*size of array above*/
+   killing uint         /*index+1 of dying slab*/
+   requested size_t     /*number of requested bytes*/
 }
 
 const (
@@ -47,15 +32,15 @@ const (
    MAX_NUMBER_OF_SLAB_CLASSES = 256
 )
 
-
-
 var slabclass [MAX_NUMBER_OF_SLAB_CLASSES]slabclass_t
 var power_smallest uint = 0
 var power_largest uint = 0
 var mem_limit size_t
 var mem_malloced size_t
-var mem_base uintptr
-var mem_current uintptr
+
+/* used in prealloc mode */
+var mem_base unsafe.Pointer
+var mem_current unsafe.Pointer
 var mem_avail size_t
 
 /* Figures out which slab class is required to store an item
@@ -82,8 +67,8 @@ func SlabInit(limit size_t, factor float32, prealloc bool) {
    mem_limit = limit
 
    if prealloc {
-      mem_base = uintptr(C.malloc(C.size_t(mem_limit)))
-      if mem_base != 0 {
+      mem_base = C.malloc(C.size_t(mem_limit))
+      if mem_base != nil {
          mem_current = mem_base
          mem_avail = mem_limit
       } else {
@@ -129,7 +114,7 @@ func slabs_preallocate(maxslabs uint) {
       if prealloc > maxslabs {
          return
       }
-      if do_slabs_new_slab(i) == 0 {
+      if do_slabs_newslab(i) == 0 {
          fmt.Println("Error while preallocating slab memory")
          os.Exit(1)
       }
@@ -145,7 +130,8 @@ func grow_slab_list(id uint) {
       }else {
          new_size = p.list_size * 2
       }
-      new_list := uintptr(C.realloc(unsafe.Pointer(p.slab_list), C.size_t(new_size*uint(unsafe.Sizeof(p.slab_list)))))
+      new_list := C.realloc(unsafe.Pointer(p.slab_list),
+                            C.size_t(new_size*uint(unsafe.Sizeof(p.slab_list))))
       p.list_size = new_size
       p.slab_list = new_list
    }
@@ -161,11 +147,57 @@ func split_slab_page_into_freelist(ptr uintptr, id uint) {
    }
 }
 
-func do_slabs_new_slab(id uint) int {
-   //p := &slabclass[id]
-   //len := 
-  return 0
+func memory_allocate(size size_t) unsafe.Pointer {
+
+   if mem_base == nil {
+      /* not in prealloc mode, using system malloc. */
+      ret := C.malloc(C.size_t(size))
+   } else {
+      ret := mem_current
+      if size > mem_avail {
+         panic("Not enough memory")
+         return nil
+      }
+      /* mem_current pointer must be aligned!!! */
+      if size % CHUNK_ALIGN_BYTES {
+         size += CHUNK_ALIGN_BYTES - (size % CHUNK_ALIGN_BYTES)
+      }
+
+      mem_current = unsafe.Pointer(&C.GoBytes(mem_current, 255)[size])
+      if size < mem_avail {
+         mem_avail -= size
+      }else{
+         mem_avail = 0
+      }
+   }
+   return ret
+}
+
+func do_slabs_newslab(id uint) int {
+   p := &slabclass[id]
+   len := p.size * p.perslab
+
+   ptr:=memory_allocate(len)
+
+   C.memset(ptr, 0, C.size_t(len))
+   split_slab_page_into_freelist(ptr, id)
+
+   p.slabs++
+   p.slab_list[p.slabs] = ptr
+   return 0
 }
 
 func do_slabs_free(ptr uintptr, size size_t, id uint) {
+  p := &slabclass[id]
+  it := (*item_t)(unsafe.Pointer(ptr))
+  it.it_flags |= ITEM_SLABBED
+  it.prev = nil
+  it.next = p.slots;
+  if it.next != nil {
+     it.next.prev = it
+  }
+  p.slots = it
+
+  p.sl_curr++
+  p.requested -= size
 }

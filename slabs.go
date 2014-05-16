@@ -16,11 +16,11 @@ type size_t uint64
 /* allocation structure */
 type slabclass_t struct {
    size size_t          /*size of items*/
-   perslab uint64       /*how many items per slab*/
+   perslab size_t       /*how many items per slab*/
    slots *item_t        /*list of item ptrs*/
    sl_curr uint         /*total free items in list*/
    slabs uint           /*the number of slabs for this class*/
-   slab_list []*        /*array of slab pointers*/
+   slab_list unsafe.Pointer /*array of slab pointers*/
    list_size uint       /*size of array above*/
    killing uint         /*index+1 of dying slab*/
    requested size_t     /*number of requested bytes*/
@@ -33,8 +33,8 @@ const (
 )
 
 var slabclass [MAX_NUMBER_OF_SLAB_CLASSES]slabclass_t
-var power_smallest uint = 0
-var power_largest uint = 0
+var power_smallest uint = 0      /*the smallest slabcalss id*/
+var power_largest uint = 0       /*the largest slabclass id*/
 var mem_limit size_t
 var mem_malloced size_t
 
@@ -87,7 +87,7 @@ func SlabInit(limit size_t, factor float32, prealloc bool) {
          size += CHUNK_ALIGN_BYTES - (size % CHUNK_ALIGN_BYTES)
       }
       slabclass[i].size = size
-      slabclass[i].perslab = uint64(ITEM_SIZE_MAX) / uint64(slabclass[i].size)
+      slabclass[i].perslab = size_t(ITEM_SIZE_MAX) / slabclass[i].size
       size = size_t(float64(size) * float64(factor))
       if size > ITEM_SIZE_MAX {
          break
@@ -130,17 +130,17 @@ func grow_slab_list(id uint) {
       }else {
          new_size = p.list_size * 2
       }
-      new_list := C.realloc(unsafe.Pointer(p.slab_list),
+      new_list := C.realloc(p.slab_list,
                             C.size_t(new_size*uint(unsafe.Sizeof(p.slab_list))))
       p.list_size = new_size
       p.slab_list = new_list
    }
 }
 
-func split_slab_page_into_freelist(ptr uintptr, id uint) {
+func split_slab_page_into_freelist(ptr unsafe.Pointer, id uint) {
    p := &slabclass[id]
-   tmp := unsafe.Pointer(ptr)
-   var x uint64 = 0
+   tmp := ptr
+   var x size_t = 0
    for x=0;x<p.perslab;x++ {
        do_slabs_free(ptr, 0, id)
        tmp = unsafe.Pointer(&C.GoBytes(tmp, 1024*1024)[p.size]);
@@ -148,18 +148,18 @@ func split_slab_page_into_freelist(ptr uintptr, id uint) {
 }
 
 func memory_allocate(size size_t) unsafe.Pointer {
-
+   var ret unsafe.Pointer = nil
    if mem_base == nil {
       /* not in prealloc mode, using system malloc. */
-      ret := C.malloc(C.size_t(size))
+      ret = C.malloc(C.size_t(size))
    } else {
-      ret := mem_current
+      ret = mem_current
       if size > mem_avail {
          panic("Not enough memory")
          return nil
       }
       /* mem_current pointer must be aligned!!! */
-      if size % CHUNK_ALIGN_BYTES {
+      if size % CHUNK_ALIGN_BYTES != 0 {
          size += CHUNK_ALIGN_BYTES - (size % CHUNK_ALIGN_BYTES)
       }
 
@@ -183,13 +183,15 @@ func do_slabs_newslab(id uint) int {
    split_slab_page_into_freelist(ptr, id)
 
    p.slabs++
-   p.slab_list[p.slabs] = ptr
+   k := p.list_size
+   tmp := ([k]*unsafe.Pointer)(p.slab_list)
+   tmp[p.slabs] = ptr
    return 0
 }
 
-func do_slabs_free(ptr uintptr, size size_t, id uint) {
+func do_slabs_free(ptr unsafe.Pointer, size size_t, id uint) {
   p := &slabclass[id]
-  it := (*item_t)(unsafe.Pointer(ptr))
+  it := (*item_t)(ptr)
   it.it_flags |= ITEM_SLABBED
   it.prev = nil
   it.next = p.slots;

@@ -183,8 +183,7 @@ func do_slabs_newslab(id uint) int {
    split_slab_page_into_freelist(ptr, id)
 
    p.slabs++
-   k := p.list_size
-   tmp := ([k]*unsafe.Pointer)(p.slab_list)
+   tmp := (*[1<<16]unsafe.Pointer)(p.slab_list)
    tmp[p.slabs] = ptr
    return 0
 }

@@ -11,7 +11,7 @@ var _slabs_inited bool = false
 
 func init_slabs() {
    if !_slabs_inited {
-      SlabInit(1024 * 1024, 1.2, true)
+      SlabsInit(1024 * 1024, 1.2, true)
       slabs_cls_info_dump()
       _slabs_inited = true
    }

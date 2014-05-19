@@ -52,7 +52,7 @@ func slabs_clsid(size size_t) uint {
    res := uint(0)
    for ;size > slabclass[res].size; {
       res++
-      if res ==  MAX_NUM_OF_SLAB_CLS {
+      if res == MAX_NUM_OF_SLAB_CLS {
          return 0
       }
    }
@@ -60,7 +60,7 @@ func slabs_clsid(size size_t) uint {
 }
 
 /* Determines the chunk sizes and initializes the slab calss */
-func SlabInit(limit size_t, factor float32, prealloc bool) {
+func SlabsInit(limit size_t, factor float32, prealloc bool) {
    item := item_t{}
    size := size_t(unsafe.Sizeof(item)) + CHUNK_SIZE
    mem_limit = limit
@@ -183,7 +183,6 @@ func split_slab_page_into_freelist(ptr unsafe.Pointer, id uint) {
 }
 
 func memory_allocate_newslab() unsafe.Pointer {
-   fmt.Println("!!!!!!free_slab_list len", free_slab_list, free_slab_list.Len())
    if free_slab_list.Len() == 0 {
       /* no available slab in free slab list */
       mem_alloced += size_t(SLAB_SIZE)
@@ -191,12 +190,10 @@ func memory_allocate_newslab() unsafe.Pointer {
          panic("Out of memory")
       }
       tmp := C.malloc(C.size_t(SLAB_SIZE))
-      fmt.Println("!!!!!malloc mem", tmp)
       free_slab_list.PushBack(tmp)
       mem_alloced += SLAB_SIZE
    }
    ret := free_slab_list.Front().Value.(unsafe.Pointer)
-   fmt.Println("newslab", ret) 
    return ret
 }
 

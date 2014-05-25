@@ -48,5 +48,8 @@ func ItemAlloc(key string, nvalue uint16) *item_t {
 }
 
 func ItemFree(it *item_t) {
-
+   clsid := it.slabs_clsid
+   it.slabs_clsid = 0
+   size := item_size(it.nkey, it.nvalue)
+   SlabsFree(unsafe.Pointer(it), size, clsid)
 }

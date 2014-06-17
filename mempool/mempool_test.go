@@ -7,11 +7,11 @@ import (
 )
 
 func Test_item_alloc_free(t *testing.T) {
-   init_slabs()
+   mp := NewPool(1024 * 1024, 1.2, false)
    key := "Hello"
    value := "world"
-   it := ItemAlloc(key, uint(len(value)))
-   ItemFree(it)
+   it := mp.ItemAlloc(key, len(value))
+   mp.ItemFree(it)
 }
 
 

@@ -3,12 +3,18 @@ package mempool
 /* a golang copy of memchached slab allocator */
 
 import (
-      "fmt"
       "unsafe"
+      log "github.com/watsonjiang/crowndb/logging"
       )
 //#include <stdlib.h>
 //#include <string.h>
 import "C"
+
+const (
+   MEMPOOL_LOGGER_ID = 0x0001
+)
+
+var logger log.Logger = log.GetLogger(MEMPOOL_LOGGER_ID)
 
 type size_t uint64
 
@@ -24,38 +30,21 @@ type slabclass_t struct {
    requested size_t     /*number of requested bytes*/
 }
 
+type slab struct {
+   next *slab         //next slab item
+   prev *slab         //prev slab item
+   ptr  unsafe.Pointer     //pointer to slab
+}
+
 const (
    SLAB_SIZE = 1024 * 1024
    CHUNK_SIZE = 32
    CHUNK_ALIGN_BYTES = 8
-   MAX_NUM_OF_SLAB_CLS = 256
 )
 
-/* Figures out which slab class is required to store an item
-   of given size
-*/
-func (m MemPool) slab_clsid(size size_t) int {
-   if size == 0 {
-      return 0
-   }
-   res := int(0)
-   for ;size > m.slabclass[res].size; {
-      res++
-      if res == MAX_NUM_OF_SLAB_CLS {
-         return 0
-      }
-   }
-   return res
-}
-
-/* Determines the chunk sizes and initializes the slab calss */
-func (m *MemPool) slab_init(limit size_t, factor float32, prealloc bool) {
-   item := Item{}
-   size := size_t(unsafe.Sizeof(item)) + CHUNK_SIZE
-   m.mem_limit = limit
-
+func (m *MemPool) slab_init(limit size_t, base_item_size size_t, factor float32, prealloc bool) {
    if prealloc {
-      /* prealloc 100 free slabs */
+      /* prealloc slabs */
       num_slabs := int(limit / size_t(SLAB_SIZE))
       if limit % SLAB_SIZE != 0 {
          num_slabs++
@@ -87,9 +76,7 @@ func (m *MemPool) slab_init(limit size_t, factor float32, prealloc bool) {
       size = size_t(float64(size) * float64(factor))
    }
 
-   if prealloc {
-      m.slab_preallocate()
-   }
+
 }
 
 func (m * MemPool) slab_alloc(size size_t, id int) unsafe.Pointer {
@@ -109,7 +96,7 @@ func (m * MemPool) slab_free(ptr unsafe.Pointer, size size_t, id int) {
 /* dump the slabclass table for debug purpose. */
 func (m *MemPool) slab_cls_info_dump(){
    for i:=m.power_smallest;i<m.power_largest;i++ {
-      fmt.Println("class", i, "size", m.slabclass[i].size)
+      logger.Debugln("class", i, "size", m.slabclass[i].size)
    }
 }
 
@@ -162,7 +149,7 @@ func (m *MemPool) grow_slab_list(id int) {
 func (m *MemPool) split_slab_page_into_freelist(ptr unsafe.Pointer, id int) {
    p := &m.slabclass[id]
    tmp := ptr
-   fmt.Println("p.id", id, "p.perslab", p.perslab)
+   logger.Debugln("p.id", id, "p.perslab", p.perslab)
    for x:=0;x<p.perslab;x++ {
        m.do_slab_free(tmp, 0, id)
        tmp = unsafe.Pointer(&C.GoBytes(tmp, SLAB_SIZE)[p.size]);

@@ -11,12 +11,11 @@ const (
    ITEM_SLABBED = 4
    ITEM_FETCHED = 8
    )
-
 /* structure for storing items in the pool*/
 type Item struct {
    next *Item
    prev *Item
-   h_next *Item    /*hash chain next*/
+   //h_next *Item      /*hash chain next*/
    time uint         /*least recent access*/
    exptime uint      /*expire time*/
    refcount int

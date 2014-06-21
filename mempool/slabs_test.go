@@ -13,6 +13,7 @@ func Test_slabs_clsid(t *testing.T) {
    fmt.Println("clsid for 32 bytes:", mp.slab_clsid(32))
    fmt.Println("clsid for 64 bytes:", mp.slab_clsid(64))
    fmt.Println("clsid for 128 bytes:", mp.slab_clsid(128))
+   mp.slab_cls_info_dump()
 }
 /*
 func Test_SlabsAllocFree(t *testing.T) {

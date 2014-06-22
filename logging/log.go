@@ -11,6 +11,9 @@ type Logger interface {
    Error(v ...interface{})
    Errorln(v ...interface{})
    Errorf(format string, v ...interface{})
+   Warn(v ...interface{})
+   Warnln(v ...interface{})
+   Warnf(format string, v ...interface{}) 
    Info(v ...interface{})
    Infoln(v ...interface{})
    Infof(format string, v ...interface{})
@@ -76,6 +79,18 @@ func (l *std_logger) Errorln(v ...interface{}) {
 }
 
 func (l *std_logger) Errorf(format string, v ...interface{}) {
+   log.Printf(format, v...)
+}
+
+func (l *std_logger) Warn(v ...interface{}) {
+   log.Print(v...)
+}
+
+func (l *std_logger) Warnln(v ...interface{}) {
+   log.Println(v...)
+}
+
+func (l *std_logger) Warnf(format string, v ...interface{}) {
    log.Printf(format, v...)
 }
 

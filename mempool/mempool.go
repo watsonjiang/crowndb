@@ -35,22 +35,28 @@ type MemPool struct {
 
 func NewPool(limit size_t, factor float32, prealloc bool) *MemPool {
    m := &MemPool{}
-   m.init(limit, factor)
+   m.init_allocators(factor)
    if prealloc {
-      /* prealloc slabs */
-      num_slabs := int(limit / size_t(SLAB_SIZE))
-      if limit % SLAB_SIZE != 0 {
-         num_slabs++
-      }
-      for i:=0; i<num_slabs; i++ {
-         m.slab_free(m.slab_alloc())
-      }
+      m.prealloc_mem()
    }
    return m
 }
 
-func (m *MemPool) init(limit size_t, factor float32) {
-   size := item_size(0, CHUNK_SIZE)  //init item size
+//prealloc memory
+func (m *MemPool) prealloc_mem() {
+   /* prealloc slabs */
+   num_slabs := int(m.mem_limit / size_t(SLAB_SIZE))
+   if m.mem_limit % SLAB_SIZE != 0 {
+      num_slabs++
+   }
+   for i:=0; i<num_slabs; i++ {
+      m.slab_free(m.do_slab_alloc())
+   }
+}
+
+//init internal data
+func (m *MemPool) init_allocators(factor float32) {
+   size := ITEM_HEAD_SIZE + CHUNK_SIZE  //init item size
    for i:=0;i<MAX_ALLOCATOR_IDX;i++ {
       /*make sure items are always n-byte aligned */
       if size % CHUNK_ALIGN_BYTES != 0 {
@@ -117,7 +123,7 @@ func (m *MemPool) dump(){
 // split an empty slab into piceses, link them into free
 // item list
 func (a *allocator_t) add_slab(s *slab_t) {
-   perslab := SLAB_SIZE / int(a.size)
+   perslab := int(SLAB_SIZE / a.size)
    var tmp *[SLAB_SIZE]byte = (*[SLAB_SIZE]byte)(s.ptr)
    for x:=0;x<perslab;x++ {
       var item *Item = (*Item)(unsafe.Pointer(&tmp[int(a.size) * x]))

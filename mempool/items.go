@@ -28,11 +28,11 @@ type Item struct {
 }
 
 const (
-   ITEM_HEADER_SIZE = size_t(unsafe.Sizeof(Item{}))
+   ITEM_HEAD_SIZE = size_t(unsafe.Sizeof(Item{}))
 )
 /* return the size of item needed to store the kv pair*/
 func item_size(nkey size_t, nvalue size_t) size_t {
-   size := ITEM_HEADER_SIZE + nkey + nvalue
+   size := ITEM_HEAD_SIZE + nkey + nvalue
    return size
 }
 

@@ -19,8 +19,8 @@ type slab_t struct {
 }
 
 const (
-   SLAB_SIZE = 1024 * 1024
-   CHUNK_SIZE = 32
+   SLAB_SIZE = size_t(1024 * 1024)
+   CHUNK_SIZE = size_t(32)
    CHUNK_ALIGN_BYTES = 8
 )
 
@@ -37,7 +37,7 @@ func (m * MemPool) slab_alloc() *slab_t {
       }
       newslab := m.do_slab_alloc()
       newslab.next = m.free_slab_list
-      m.free_slab_list = newslab.next
+      m.free_slab_list = newslab
    }
    t := m.free_slab_list
    m.free_slab_list = t.next

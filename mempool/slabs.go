@@ -26,7 +26,7 @@ const (
 
 //get slab from free list or system malloc
 //return nil if out of memory
-func (m * MemPool) slab_alloc() *slab_t {
+func (m *mempool_t) slab_alloc() *slab_t {
    if m.free_slab_list == nil {
       if m.is_prealloc {
          return nil
@@ -45,12 +45,12 @@ func (m * MemPool) slab_alloc() *slab_t {
 }
 
 //free slab to free list.
-func (m * MemPool) slab_free(s *slab_t) {
+func (m *mempool_t) slab_free(s *slab_t) {
    s.next = m.free_slab_list
    m.free_slab_list = s
 }
 
-func (m * MemPool) do_slab_alloc() *slab_t {
+func (m *mempool_t) do_slab_alloc() *slab_t {
    s := &slab_t{}
    s.ptr = C.malloc(C.size_t(SLAB_SIZE))
    m.mem_allocated += size_t(SLAB_SIZE)

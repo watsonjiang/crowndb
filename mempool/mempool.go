@@ -3,7 +3,7 @@ package mempool
 import (
    //"sync"
    //"container/list"
-   "unsafe"
+   //"fmt"
    log "github.com/watsonjiang/crowndb/logging"
 )
 
@@ -14,15 +14,7 @@ const (
 
 var logger log.Logger = log.GetLogger(MEMPOOL_LOGGER_ID)
 
-/* allocator structure */
-type allocator_t struct {
-   size size_t              //size of items in this allocator
-   used_item_list *Item     //used item list
-   free_item_list *Item     //free item list
-   slab_list *slab_t        //used slab list 
-}
-
-type MemPool struct {
+type mempool_t struct {
    allocators [MAX_ALLOCATOR_IDX]allocator_t
    idx_smallest int
    idx_largest int
@@ -33,8 +25,23 @@ type MemPool struct {
    is_prealloc  bool      //true - prealloc mode.
 }
 
-func NewPool(limit size_t, factor float32, prealloc bool) *MemPool {
-   m := &MemPool{}
+type MemPool interface {
+   ItemAlloc(size size_t) Item
+   ItemFree(it Item)
+}
+
+const (
+   ITEM_TYPE_STR = iota
+)
+
+type Item interface {
+   SetKV(key string, data []byte)
+   GetKV() (string, []byte)
+}
+
+func NewPool(limit size_t, factor float32, prealloc bool) MemPool {
+   m := &mempool_t{}
+   m.mem_limit = limit
    m.init_allocators(factor)
    if prealloc {
       m.prealloc_mem()
@@ -43,7 +50,7 @@ func NewPool(limit size_t, factor float32, prealloc bool) *MemPool {
 }
 
 //prealloc memory
-func (m *MemPool) prealloc_mem() {
+func (m *mempool_t) prealloc_mem() {
    /* prealloc slabs */
    num_slabs := int(m.mem_limit / size_t(SLAB_SIZE))
    if m.mem_limit % SLAB_SIZE != 0 {
@@ -55,7 +62,7 @@ func (m *MemPool) prealloc_mem() {
 }
 
 //init internal data
-func (m *MemPool) init_allocators(factor float32) {
+func (m *mempool_t) init_allocators(factor float32) {
    size := ITEM_HEAD_SIZE + CHUNK_SIZE  //init item size
    for i:=0;i<MAX_ALLOCATOR_IDX;i++ {
       /*make sure items are always n-byte aligned */
@@ -76,7 +83,7 @@ func (m *MemPool) init_allocators(factor float32) {
 /* Figures out which pool class is required to store an item
    of given size
 */
-func (m MemPool) allocator_idx(size size_t) int {
+func (m mempool_t) allocator_idx(size size_t) int {
    if size == 0 {
       return -1
    }
@@ -90,10 +97,10 @@ func (m MemPool) allocator_idx(size size_t) int {
    return res
 }
 
-func (m *MemPool) ItemAlloc(nkey int, nvalue int) *Item {
-   size := item_size(size_t(nkey), size_t(nvalue))
-   idx := m.allocator_idx(size)
-   it := m.allocators[idx].item_alloc(nkey, nvalue)
+func (m *mempool_t) ItemAlloc(size size_t) Item {
+   nsize := item_size(size_t(0), size_t(size))
+   idx := m.allocator_idx(nsize)
+   it := m.allocators[idx].alloc_item()
    if it == nil {
       slab := m.slab_alloc()
       if slab == nil {
@@ -102,79 +109,23 @@ func (m *MemPool) ItemAlloc(nkey int, nvalue int) *Item {
          return nil
       }
       m.allocators[idx].add_slab(slab)
-      it = m.allocators[idx].item_alloc(nkey, nvalue)
+      it = m.allocators[idx].alloc_item()
    }
    return it
 }
 
-func (m *MemPool) ItemFree(it *Item) {
-   size := item_size(it.nkey, it.nval)
+func (m *mempool_t) ItemFree(it Item) {
+   item := it.(*item_t)
+   size := item_size(item.nkey, item.nval)
    idx := m.allocator_idx(size)
-   m.allocators[idx].item_free(it)
+   m.allocators[idx].free_item(item)
 }
 
 /* dump the allocator_class table for debug purpose. */
-func (m *MemPool) dump(){
+func (m *mempool_t) dump(){
    for i:=m.idx_smallest;i<m.idx_largest;i++ {
       logger.Debugln("allocator", i, "size", m.allocators[i].size)
    }
 }
 
-// split an empty slab into piceses, link them into free
-// item list
-func (a *allocator_t) add_slab(s *slab_t) {
-   perslab := int(SLAB_SIZE / a.size)
-   var tmp *[SLAB_SIZE]byte = (*[SLAB_SIZE]byte)(s.ptr)
-   for x:=0;x<perslab;x++ {
-      var item *Item = (*Item)(unsafe.Pointer(&tmp[int(a.size) * x]))
-      item.next = a.free_item_list
-      a.free_item_list.prev = item.next
-      a.free_item_list = item
-      item.prev = nil
-   }
-   s.next = a.slab_list
-   a.slab_list = s
-}
 
-func (a *allocator_t)item_alloc(nkey int, nvalue int) *Item{
-   var it *Item
-   //get one from free list
-   if a.free_item_list == nil {
-      return nil    //return nil when full
-   }else{
-      it = a.free_item_list
-      a.free_item_list=it.next
-   }
-   //put it into used list
-   it.next = a.used_item_list
-   if a.used_item_list != nil {
-      a.used_item_list.prev = it
-   }
-   it.prev = nil
-   a.used_item_list = it
-   /* initialize the item */
-   it.refcount = 1
-   it.nkey = size_t(nkey)
-   it.nval = size_t(nvalue)
-   return it
-}
-
-func (a *allocator_t)item_free(it *Item) {
-  //unlink the item from used list
-  if it.prev == nil { //head of used list
-     a.used_item_list = it.next
-     if a.used_item_list != nil {
-        a.used_item_list.prev = nil
-     }
-  }else {  //in the middle of used list
-     it.prev.next = it.next
-     if it.next != nil {
-        it.next.prev = it.prev
-     }
-  }
-  //link it into free list
-  it.next = a.free_item_list
-  a.free_item_list.prev = it.next
-  a.free_item_list = it
-  a.free_item_list.prev = nil
-}

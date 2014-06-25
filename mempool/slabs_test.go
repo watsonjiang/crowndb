@@ -6,7 +6,7 @@ import (
 )
 
 func TestDoSlabAlloc(t *testing.T) {
-   mp := &MemPool{}
+   mp := &mempool_t{}
    slab := mp.do_slab_alloc()
    if slab == nil ||
       mp.mem_allocated != SLAB_SIZE {
@@ -17,7 +17,7 @@ func TestDoSlabAlloc(t *testing.T) {
 
 //test slab alloc with empty free slab list
 func TestSlabsAlloc(t *testing.T) {
-   mp := &MemPool{}
+   mp := &mempool_t{}
    mp.mem_limit = 1024*1024
    s := mp.slab_alloc()
    if s==nil || mp.mem_allocated != SLAB_SIZE || mp.free_slab_list != nil {
@@ -30,7 +30,7 @@ func TestSlabsAlloc(t *testing.T) {
 
 //test slab alloc with non-empty free slab list
 func TestSlabsAlloc1(t *testing.T) {
-   mp := &MemPool{}
+   mp := &mempool_t{}
    mp.mem_limit = 1024 * 1024
    t0 := &slab_t{}
    t1 := &slab_t{}
@@ -48,7 +48,7 @@ func TestSlabsAlloc1(t *testing.T) {
 
 //test slab alloc with OOM, non-prealloc
 func TestSlabsAlloc2(t *testing.T) {
-   mp := &MemPool{}
+   mp := &mempool_t{}
    mp.free_slab_list = nil
    mp.mem_allocated = 0
    mp.mem_limit = 0
@@ -61,7 +61,7 @@ func TestSlabsAlloc2(t *testing.T) {
 
 //test slab alloc with OOM, prealloc
 func TestSlabsAlloc3(t *testing.T) {
-   mp := &MemPool{}
+   mp := &mempool_t{}
    mp.is_prealloc = true
    mp.free_slab_list = nil 
    mp.mem_allocated = 0
@@ -76,7 +76,7 @@ func TestSlabsAlloc3(t *testing.T) {
 
 func Test_SlabsAllocFree(t *testing.T) {
    s := &slab_t{}
-   mp := &MemPool{}
+   mp := &mempool_t{}
    mp.slab_free(s)
    if mp.free_slab_list != s {
       t.Log("mp.free_slab_list", mp.free_slab_list, "s", s)

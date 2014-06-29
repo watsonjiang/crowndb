@@ -3,7 +3,9 @@ package mempool
 import (
    //"sync"
    //"container/list"
-   //"fmt"
+   "fmt"
+   "bytes"
+   "strconv"
    log "github.com/watsonjiang/crowndb/logging"
 )
 
@@ -16,6 +18,7 @@ var logger log.Logger = log.GetLogger(MEMPOOL_LOGGER_ID)
 
 type mempool_t struct {
    allocators [MAX_ALLOCATOR_IDX]allocator_t
+   alloc_factor float32
    idx_smallest int
    idx_largest int
    mem_limit size_t
@@ -26,7 +29,8 @@ type mempool_t struct {
 }
 
 type MemPool interface {
-   ItemAlloc(size size_t) Item
+   ItemAlloc(nkey int, nval int) Item
+   ItemRealloc(it Item, new_nkey int, new_nval int) Item
    ItemFree(it Item)
 }
 
@@ -63,6 +67,7 @@ func (m *mempool_t) prealloc_mem() {
 
 //init internal data
 func (m *mempool_t) init_allocators(factor float32) {
+   m.alloc_factor = factor
    size := ITEM_HEAD_SIZE + CHUNK_SIZE  //init item size
    for i:=0;i<MAX_ALLOCATOR_IDX;i++ {
       /*make sure items are always n-byte aligned */
@@ -97,8 +102,8 @@ func (m mempool_t) allocator_idx(size size_t) int {
    return res
 }
 
-func (m *mempool_t) ItemAlloc(size size_t) Item {
-   nsize := item_size(size_t(0), size_t(size))
+func (m *mempool_t) ItemAlloc(nkey int, nval int) Item {
+   nsize := item_size(size_t(nkey), size_t(nval))
    idx := m.allocator_idx(nsize)
    it := m.allocators[idx].alloc_item()
    if it == nil {
@@ -111,21 +116,39 @@ func (m *mempool_t) ItemAlloc(size size_t) Item {
       m.allocators[idx].add_slab(slab)
       it = m.allocators[idx].alloc_item()
    }
+   it.nkey = size_t(nkey)
+   it.nval = size_t(nval)
+   m.mem_requested += size_t(nkey+nval)
    return it
+}
+
+func (m *mempool_t) ItemRealloc(it Item, new_nkey int, new_nval int) Item {
+   return nil
 }
 
 func (m *mempool_t) ItemFree(it Item) {
    item := it.(*item_t)
    size := item_size(item.nkey, item.nval)
    idx := m.allocator_idx(size)
+   m.mem_requested -= size_t(item.nkey+item.nval)
    m.allocators[idx].free_item(item)
 }
 
 /* dump the allocator_class table for debug purpose. */
-func (m *mempool_t) dump(){
-   for i:=m.idx_smallest;i<m.idx_largest;i++ {
-      logger.Debugln("allocator", i, "size", m.allocators[i].size)
+func (m *mempool_t) Info(verbose int) string{
+   var buf bytes.Buffer
+   buf.WriteString("----MemPool----\n")
+   buf.WriteString("size_limit:"+strconv.Itoa(int(m.mem_limit))+"\n")
+   buf.WriteString("alloc_factor:"+fmt.Sprintf("%.2f", m.alloc_factor)+"\n")
+   per := float32(m.mem_requested)/float32(m.mem_allocated)*100.0
+   buf.WriteString("requested/allocated:"+strconv.Itoa(int(m.mem_requested))+
+                   "/"+strconv.Itoa(int(m.mem_allocated))+fmt.Sprintf("(%.2f%%)\n", per))
+   if verbose > 0 {
+      for i:=m.idx_smallest;i<m.idx_largest;i++ {
+         buf.WriteString(fmt.Sprintf("  allocator %d size %d\n", i, m.allocators[i].size))
+      }
    }
+   return buf.String()
 }
 
 

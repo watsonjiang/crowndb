@@ -3,6 +3,8 @@ package mempool
 import (
    "testing"
    //"unsafe"
+   "fmt"
+   "strconv"
 )
 
 func countSlabList(list *slab_t) int {
@@ -60,13 +62,23 @@ func TestAllocatorIdx(t *testing.T) {
 
 //an example of how to use mempool
 func TestExample(t *testing.T) {
-   mp := NewPool(size_t(10*1024*1024), 1.2, true)
-   key := "testkey"
-   value := "testvalue"
-   it := mp.ItemAlloc(size_t(len(key)+len(value)))
-   if it == nil {
-      t.Error("mp.ItemAlloc not correct")
+   var tmp []byte
+   for i:=0;i<1024;i++ {
+      tmp = append(tmp, byte(i % 128))
    }
-   it.SetKV(key, []byte(value))
-   mp.ItemFree(it)
+   mp := NewPool(size_t(100*1024*1024), 1.2, false)
+   fmt.Println(mp.(*mempool_t).Info(0))
+   for i:=0;i<102400;i++ {
+      key := "testkey"+strconv.Itoa(i)
+      value := "testvalue"+string(tmp[0:i % 1024])
+      it := mp.ItemAlloc(len(key), len(value))
+      if it == nil {
+         t.Error("mp.ItemAlloc not correct")
+         return
+      }
+      it.SetKV(key, []byte(value))
+      if i % 100 == 0 {
+         fmt.Println(mp.(*mempool_t).Info(0))
+      }
+   }
 }

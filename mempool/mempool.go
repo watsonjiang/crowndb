@@ -30,7 +30,7 @@ type mempool_t struct {
 
 type MemPool interface {
    ItemAlloc(nkey int, nval int) Item
-   ItemRealloc(it Item, new_nkey int, new_nval int) Item
+   ItemRealloc(it Item, new_nval int) Item
    ItemFree(it Item)
 }
 
@@ -122,7 +122,24 @@ func (m *mempool_t) ItemAlloc(nkey int, nval int) Item {
    return it
 }
 
-func (m *mempool_t) ItemRealloc(it Item, new_nkey int, new_nval int) Item {
+func (m *mempool_t) ItemRealloc(it Item, new_nval int) Item {
+   item := it.(*item_t)
+   old_nsize := item_size(item.nkey, item.nval)
+   old_idx := m.allocator_idx(old_nsize)
+   new_nsize := item_size(size_t(new_nkey), size_t(new_nval))
+   new_idx := m.allocator_idx(new_nsize)
+   new_it := m.allocators[new_idx].alloc_item()
+   if new_it == nil {
+      slab := m.slab_alloc()
+      if slab == nil {
+         logger.Warn("Mempool out of memory")
+         return nil
+      }
+      m.allocators[new_idx].add_slab(slab)
+      new_it = m.allocators[new_idx].alloc_item()
+   }
+   new_it.nkey = size_t(new_nkey)
+   new_it.
    return nil
 }
 

@@ -171,14 +171,14 @@ func (m *mempool_t) Info(verbose int) string{
    buf.WriteString("----MemPool----\n")
    buf.WriteString("size_limit:"+strconv.Itoa(int(m.mem_limit))+"\n")
    buf.WriteString("alloc_factor:"+fmt.Sprintf("%.2f", m.alloc_factor)+"\n")
-   var per float32
    if m.mem_allocated == 0 {
-      per = 100.00
+      buf.WriteString("requested/allocated:"+strconv.Itoa(int(m.mem_requested))+
+                      "/"+strconv.Itoa(int(m.mem_allocated))+"\n")
    }else{
-      per = float32(m.mem_requested)/float32(m.mem_allocated)*100.0
+      per := float32(m.mem_requested)/float32(m.mem_allocated)*100.0
+      buf.WriteString("requested/allocated:"+strconv.Itoa(int(m.mem_requested))+
+                      "/"+strconv.Itoa(int(m.mem_allocated))+fmt.Sprintf("(%.2f%%)\n", per))
    }
-   buf.WriteString("requested/allocated:"+strconv.Itoa(int(m.mem_requested))+
-                   "/"+strconv.Itoa(int(m.mem_allocated))+fmt.Sprintf("(%.2f%%)\n", per))
    if verbose > 0 {
       for i:=m.idx_smallest;i<m.idx_largest;i++ {
          buf.WriteString(fmt.Sprintf("  allocator %d size %d\n", i, m.allocators[i].size))

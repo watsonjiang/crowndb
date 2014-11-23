@@ -10,7 +10,7 @@ import (
 )
 
 // murmur3 32bits hash
-func murmur3_32(key string) uint32{
+func murmur3_32(key []byte) uint32{
    var c1 uint32 = 0xcc9e2d51;
    var c2 uint32 = 0x1b873593;
    var r1 uint32 = 15;
@@ -19,7 +19,7 @@ func murmur3_32(key string) uint32{
    var n uint32 = 0xe6546b64;
 
    var hash uint32  = uint32(0 ^ len(key));
-   var buf []byte = []byte(key)
+   var buf []byte = key
    nblocks := len(key) / 4;
    for i:=0;i<nblocks;i++ {
       k := *((*uint32)(unsafe.Pointer(&buf[i*4])))

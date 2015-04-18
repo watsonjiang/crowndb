@@ -5,6 +5,7 @@ import (
    //"unsafe"
    "fmt"
    "strconv"
+   "github.com/watsonjiang/crowndb/log"
 )
 
 func countSlabList(list *slab_t) int {
@@ -66,16 +67,18 @@ func BenchmarkAllocFree(t *testing.B) {
 
 //an example of how to use mempool
 func TestExample(t *testing.T) {
+   l := logging.GetLogger(MEMPOOL_LOGGER_ID)
+   l.SetLevel(logging.L_DEBUG)
    var tmp []byte
    for i:=0;i<1024;i++ {
       tmp = append(tmp, byte('a'))
    }
-   mp := NewPool(size_t(100*1024*1024), 1.2, false)
+   mp := NewPool(size_t(1024*1024*1024), 1.2, false)
    //print pool statistic info
    fmt.Println(mp.(*mempool_t).Info(1))
    //allocate items
    var items []Item
-   for i:=0;i<102400;i++ {
+   for i:=0;i<1024*1024*10;i++ {
       key := "testkey"+strconv.Itoa(i)
       value := "testvalue"+string(tmp[0:i % 1024])
       it := mp.ItemAlloc(len(key), len(value))
